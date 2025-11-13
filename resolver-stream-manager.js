@@ -1,3 +1,4 @@
+const { resolveStalker } = require('./resolver-stalker-hook');
 const config = require('./config');
 const PythonResolver = require('./python-resolver');
 
