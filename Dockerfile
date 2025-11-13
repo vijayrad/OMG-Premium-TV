@@ -1,31 +1,33 @@
-# Usa un'immagine Node.js come base
-FROM node:20-slim
+# Use Node 20 LTS on Alpine for minimal footprint
+FROM node:20-alpine AS builder
 
-# Imposta la directory di lavoro
 WORKDIR /app
 
-# Installa git, Python e pip (se necessario)
-RUN apt-get update && \
-    apt-get install -y git python3 python3-pip && \
-    pip3 install requests --break-system-packages && \
-    rm -rf /var/lib/apt/lists/*
+# Copy package files first for better cache
+COPY package*.json ./
+RUN npm ci --only=production
 
-# Copia i file del progetto
-COPY package.json package-lock.json ./
-RUN npm install
-
-# Copia il resto del codice
+# Copy source
 COPY . .
 
-# Crea directory per i dati e imposta i permessi
-RUN mkdir -p /app/data && chown -R node:node /app/data
+# Build step if needed (skip if no build phase)
+# RUN npm run build
 
-# Crea la directory temp e imposta i permessi (come nel Dockerfile di Hugging Face)
-RUN mkdir -p /app/temp && \
-    chmod 777 /app/temp
+# Final image
+FROM node:20-alpine AS runtime
 
-# Esponi la porta 10000 (usata dal server)
-EXPOSE 10000
+WORKDIR /app
 
-# Avvia l'add-on
+# Copy dependencies
+COPY --from=builder /app/node_modules ./node_modules
+# Copy app
+COPY --from=builder /app ./
+
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+ENV NODE_ENV=production
+EXPOSE 10000 10443
+
 CMD ["node", "index.js"]
